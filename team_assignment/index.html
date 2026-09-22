@@ -112,7 +112,7 @@ textarea { width: 100%; min-height: 250px; resize: vertical; border: 1px solid v
 .round-label small { font-family: var(--body); font-size: 14px; color: var(--muted); margin-left: 8px; }
 .slots { display: grid; grid-template-columns: repeat(var(--cols, 4), minmax(0, 1fr)); gap: 14px; }
 @media (max-width: 640px) { .slots { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-.slot { border: 2px dashed var(--line); border-radius: 12px; min-height: 150px; padding: 14px; display: grid; align-content: space-between; gap: 10px; background: var(--ground); transition: background-color .3s, border-color .3s; }
+.slot { border: 2px dashed var(--line); border-radius: 12px; min-height: 132px; padding: 14px; display: grid; align-content: space-between; gap: 10px; background: var(--ground); transition: background-color .3s, border-color .3s; }
 .slot.filled { border-style: solid; }
 .slot .name { font-size: clamp(20px, 2.6vw, 30px); font-weight: 700; line-height: 1.2; word-break: keep-all; overflow-wrap: anywhere; }
 .slot .pin { font-size: 12px; color: var(--muted); letter-spacing: 0.04em; }
@@ -126,6 +126,39 @@ textarea { width: 100%; min-height: 250px; resize: vertical; border: 1px solid v
 @keyframes land { from { transform: scale(1.6); } to { transform: scale(1); } }
 .slot.idle { display: grid; place-items: center; color: var(--muted); font-size: 14px; text-align: center; }
 .banner { margin: 0; padding: 14px 16px; border-radius: 10px; background: var(--ink); color: var(--surface); font-weight: 700; font-size: 18px; }
+
+/* 진행 트랙: 한 칸 = 한 번의 추첨 */
+.track { list-style: none; margin: 0; padding: 0; display: flex; gap: 6px; }
+.track li { flex: 1 1 0; min-width: 0; height: 30px; border-radius: 6px; border: 1px solid var(--line); background: var(--ground); display: grid; place-items: center; white-space: nowrap; overflow: hidden; font-family: var(--mono); font-size: 12px; color: var(--muted); transition: background-color .3s, color .3s; }
+.track li.done { background: var(--ink); border-color: var(--ink); color: var(--surface); }
+.track li.now { border: 2px solid var(--ink); color: var(--ink); font-weight: 700; }
+.track li.five::after { content: "·5명"; font-size: 10px; }
+.drawing .sub { display: none; }
+
+/* 추첨 영역 + 카운트다운 */
+.arena { position: relative; }
+.countdown { position: absolute; inset: -6px; display: grid; place-items: center; border-radius: 14px; background: color-mix(in srgb, var(--surface) 82%, transparent); font-family: var(--display); font-size: clamp(80px, 14vw, 150px); line-height: 1; z-index: 2; }
+.countdown span { animation: pop .45s cubic-bezier(.2, 1.5, .4, 1); }
+@keyframes pop { from { transform: scale(2.2); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+
+/* 다음 추첨 */
+.cta { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 20px; padding-top: 4px; }
+.upnext { color: var(--muted); font-size: 15px; min-width: 0; }
+.upnext b { color: var(--ink); }
+.btn.go { font-size: 22px; padding: 16px 34px; border-radius: 12px; }
+.btn.go:not(:disabled) { animation: breathe 1.8s ease-in-out infinite; }
+@keyframes breathe { 50% { transform: scale(1.04); } }
+.tip { font-size: 12px; color: var(--muted); }
+
+/* 이름이 팀으로 날아가는 효과 */
+.flyer { position: fixed; z-index: 50; pointer-events: none; font-weight: 700; font-size: 20px; padding: 4px 12px; border-radius: 999px; background: var(--surface); border: 2px solid var(--ink); white-space: nowrap; transform-origin: 0 0; }
+.flyer[data-t="A"] { border-color: var(--team-a); background: var(--tint-a); }
+.flyer[data-t="B"] { border-color: var(--team-b); background: var(--tint-b); }
+.flyer[data-t="C"] { border-color: var(--team-c); background: var(--tint-c); }
+.flyer[data-t="D"] { border-color: var(--team-d); background: var(--tint-d); }
+.team-head .n.bump { animation: bump .4s ease-out; }
+@keyframes bump { 40% { transform: scale(1.5); } }
+#confetti { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 60; }
 
 /* ---------- 팀 보드 ---------- */
 .board { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
@@ -147,14 +180,14 @@ textarea { width: 100%; min-height: 250px; resize: vertical; border: 1px solid v
 .team li { counter-increment: m; display: flex; align-items: baseline; gap: 10px; padding: 5px 16px; font-size: 16px; }
 .team li::before { content: counter(m, decimal-leading-zero); font-family: var(--mono); font-size: 12px; color: var(--muted); }
 .team li .fx { font-size: 11px; color: var(--muted); border: 1px solid var(--line); border-radius: 4px; padding: 0 5px; }
-.team li.new { animation: flash 1.2s ease-out; }
-@keyframes flash { from { background: var(--grid); } to { background: transparent; } }
+.team li.new { animation: flash 1.6s ease-out; }
+@keyframes flash { from { background: var(--grid); font-weight: 700; } to { background: transparent; } }
 .team.big { outline: 3px solid var(--ink); outline-offset: -3px; }
 .bottom { display: flex; flex-wrap: wrap; gap: 10px; justify-content: flex-end; }
 .toast { font-size: 13px; color: var(--muted); align-self: center; }
 
 @media (prefers-reduced-motion: reduce) {
-  .slot.land .result, .team li.new { animation: none; }
+  .slot.land .result, .team li.new, .btn.go, .countdown span, .team-head .n.bump { animation: none !important; }
 }
 </style>
 
@@ -204,16 +237,27 @@ textarea { width: 100%; min-height: 250px; resize: vertical; border: 1px solid v
   <!-- 추첨 무대 -->
   <section class="stage" id="stage" hidden>
     <div class="stage-top">
-      <div class="round-label" id="round-label"></div>
+      <div class="round-label" id="round-label" aria-live="polite"></div>
       <div class="actions">
-        <button type="button" class="btn big" id="next">다음 줄 뽑기</button>
-        <button type="button" class="btn big" id="again" hidden>같은 명단으로 다시 추첨</button>
+        <button type="button" class="btn ghost" id="sound" aria-pressed="true">소리 켜짐</button>
         <button type="button" class="btn ghost" id="auto">끝까지 자동 진행</button>
         <button type="button" class="btn ghost" id="reset">명단 수정</button>
       </div>
     </div>
-    <div class="slots" id="slots"></div>
+    <ol class="track" id="track" aria-label="추첨 진행 상황"></ol>
+    <div class="arena">
+      <div class="slots" id="slots"></div>
+      <div class="countdown" id="countdown" hidden aria-hidden="true"></div>
+    </div>
     <p class="banner" id="banner" hidden></p>
+    <div class="cta">
+      <div class="upnext" id="upnext"></div>
+      <div class="actions">
+        <span class="tip" id="tip">스페이스바로도 시작할 수 있어요</span>
+        <button type="button" class="btn go" id="next">다음 추첨 시작</button>
+        <button type="button" class="btn go" id="again" hidden>같은 명단으로 다시 추첨</button>
+      </div>
+    </div>
   </section>
 
   <section class="board" id="board" aria-label="팀 편성 현황"></section>
@@ -222,6 +266,8 @@ textarea { width: 100%; min-height: 250px; resize: vertical; border: 1px solid v
     <button type="button" class="btn ghost" id="copy">결과 복사</button>
   </div>
 </div>
+
+<canvas id="confetti" hidden aria-hidden="true"></canvas>
 
 <script>
 (() => {
@@ -369,52 +415,153 @@ textarea { width: 100%; min-height: 250px; resize: vertical; border: 1px solid v
   });
 
   // ---------- 팀 보드 ----------
-  function renderBoard(highlight = new Set(), final = false) {
+  // pending: 아직 날아오는 중이라 숨겨 둘 이름
+  function renderBoard(pending = new Set(), final = false) {
     const board = $("board");
     board.innerHTML = "";
     TEAMS.forEach((t) => {
       const col = document.createElement("div");
       col.className = "team" + (final && bigTeams.includes(t) ? " big" : "");
       col.dataset.t = t;
-      col.innerHTML = `<div class="team-head"><div class="t">${t}<span>팀</span></div><div class="n">${teams[t].length}명</div></div><ol></ol>`;
+      const shown = teams[t].filter((m) => !pending.has(m.name)).length;
+      col.innerHTML = `<div class="team-head"><div class="t">${t}<span>팀</span></div><div class="n">${shown}명</div></div><ol></ol>`;
       const ol = col.querySelector("ol");
       teams[t].forEach((m) => {
         const li = document.createElement("li");
-        if (highlight.has(m.name)) li.className = "new";
+        li.dataset.name = m.name;
+        if (pending.has(m.name)) li.style.visibility = "hidden";
         li.append(m.name);
         if (m.fixed) { const f = document.createElement("span"); f.className = "fx"; f.textContent = "고정"; li.append(f); }
         ol.append(li);
       });
       board.append(col);
     });
-    $("placed").textContent = TEAMS.reduce((s, t) => s + teams[t].length, 0);
+    $("placed").textContent = TEAMS.reduce((s, t) => s + teams[t].length, 0) - pending.size;
   }
+
+  // ---------- 효과음 ----------
+  let soundOn = true;
+  let actx = null;
+  function tone(freq, dur = 0.08, type = "square", vol = 0.04, when = 0) {
+    if (!soundOn) return;
+    try {
+      actx = actx || new (window.AudioContext || window.webkitAudioContext)();
+      const t0 = actx.currentTime + when;
+      const o = actx.createOscillator();
+      const g = actx.createGain();
+      o.type = type; o.frequency.value = freq;
+      g.gain.setValueAtTime(vol, t0);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+      o.connect(g).connect(actx.destination);
+      o.start(t0); o.stop(t0 + dur + 0.02);
+    } catch (e) {}
+  }
+  const sfx = {
+    tick: () => tone(1100, 0.025, "square", 0.02),
+    count: () => tone(440, 0.16, "sine", 0.09),
+    go: () => tone(880, 0.3, "sine", 0.09),
+    land: (i) => { tone(523 + i * 60, 0.12, "triangle", 0.1); tone(784 + i * 60, 0.2, "triangle", 0.08, 0.07); },
+    drop: () => tone(660, 0.06, "sine", 0.05),
+    fanfare: () => [523, 659, 784, 1047, 784, 1047].forEach((f, i) => tone(f, i === 5 ? 0.6 : 0.16, "triangle", 0.1, i * 0.14)),
+  };
+  $("sound").addEventListener("click", () => {
+    soundOn = !soundOn;
+    $("sound").setAttribute("aria-pressed", String(soundOn));
+    $("sound").textContent = soundOn ? "소리 켜짐" : "소리 꺼짐";
+  });
 
   // ---------- 추첨 진행 ----------
-  function showIdleSlots(text) {
-    $("slots").innerHTML = `<div class="slot idle" style="grid-column:1/-1">${text}</div>`;
+  function renderTrack() {
+    const track = $("track");
+    track.innerHTML = "";
+    plan.forEach((g, i) => {
+      const li = document.createElement("li");
+      li.textContent = i + 1;
+      if (g.length === 5) li.classList.add("five");
+      if (i < round) li.classList.add("done");
+      else if (i === round) li.classList.add("now");
+      li.title = g.map((m) => m.name).join(", ");
+      track.append(li);
+    });
   }
 
-  function updateRoundLabel() {
+  function updateControls() {
     const total = plan.length;
-    const label = $("round-label");
-    label.textContent = round < total ? `${round + 1}번째 추첨` : "추첨 완료";
-    const small = document.createElement("small");
-    small.textContent = `${Math.min(round, total)} / ${total}회 진행`;
-    label.append(small);
     const done = round >= total;
+    const label = $("round-label");
+    // busy: 지금 round번째 줄을 추첨하는 중 / 아니면 방금 끝난 줄의 결과를 보여주는 중
+    label.textContent = done ? "추첨 완료" : busy ? `${round + 1}번째 추첨` : `${round}번째 추첨 결과`;
+    const small = document.createElement("small");
+    small.textContent = `${Math.min(round, total)} / ${total}회 완료`;
+    label.append(small);
+
     $("next").hidden = done;
-    $("auto").hidden = done;
     $("again").hidden = !done;
-    if (!done) $("next").textContent = `다음 ${plan[round].length}명 뽑기`;
+    $("tip").hidden = done || busy;
     $("next").disabled = busy;
-    $("auto").disabled = busy;
+    $("auto").disabled = busy || done || autoRun;
     $("reset").disabled = busy;
+    if (!done) $("next").textContent = busy ? "추첨 중…" : `${round + 1}번째 추첨 시작`;
+
+    const up = $("upnext");
+    up.textContent = "";
+    if (!done && !busy) {
+      up.append("다음 차례 ");
+      const b = document.createElement("b");
+      b.textContent = plan[round].map((m) => m.name).join(", ");
+      up.append(b);
+    }
+    renderTrack();
+  }
+
+  async function countdown() {
+    const box = $("countdown");
+    box.hidden = false;
+    for (const n of ["3", "2", "1"]) {
+      box.innerHTML = `<span>${n}</span>`;
+      sfx.count();
+      await sleep(480);
+    }
+    sfx.go();
+    box.hidden = true;
+  }
+
+  // 공개된 이름이 팀 명단으로 날아가 쌓인다
+  async function flyToBoard(group, els) {
+    const lands = group.map((m, i) => {
+      const li = $("board").querySelector(`li[data-name="${CSS.escape(m.name)}"]`);
+      const count = li.closest(".team").querySelector(".n");
+      const show = () => {
+        li.style.visibility = "";
+        li.classList.add("new");
+        count.textContent = `${parseInt(count.textContent, 10) + 1}명`;
+        count.classList.remove("bump"); void count.offsetWidth; count.classList.add("bump");
+        $("placed").textContent = parseInt($("placed").textContent, 10) + 1;
+        sfx.drop();
+      };
+      if (reduceMotion || !Element.prototype.animate) { show(); return Promise.resolve(); }
+      const from = els[i].querySelector(".name").getBoundingClientRect();
+      const to = li.getBoundingClientRect();
+      const ghost = document.createElement("div");
+      ghost.className = "flyer";
+      ghost.dataset.t = m.team;
+      ghost.textContent = m.name;
+      ghost.style.left = from.left + "px";
+      ghost.style.top = from.top + "px";
+      document.body.append(ghost);
+      const dx = to.left - from.left, dy = to.top - from.top;
+      return ghost.animate(
+        [{ transform: "translate(0, 0) scale(1)" }, { transform: `translate(${dx * 0.5}px, ${dy * 0.5 - 60}px) scale(1.1)`, offset: 0.45 }, { transform: `translate(${dx}px, ${dy}px) scale(0.8)` }],
+        { duration: 800, delay: i * 160, easing: "cubic-bezier(.45, 0, .3, 1)", fill: "forwards" }
+      ).finished.then(() => { ghost.remove(); show(); });
+    });
+    await Promise.all(lands);
   }
 
   async function drawRound() {
     if (busy || round >= plan.length) return;
-    busy = true; updateRoundLabel();
+    busy = true;
+    updateControls();
     const group = plan[round];
     const slots = $("slots");
     slots.innerHTML = "";
@@ -427,40 +574,80 @@ textarea { width: 100%; min-height: 250px; resize: vertical; border: 1px solid v
       slots.append(s);
       return s;
     });
-    await sleep(350);
+    await countdown();
 
     // 한 명씩 팀 공개: 글자가 돌다가 멈춤
     for (let i = 0; i < group.length; i++) {
       const res = els[i].querySelector(".result");
       if (!reduceMotion) {
-        const spins = 10 + i * 2;
+        const spins = 12 + i * 2;
+        const offset = Math.floor(Math.random() * 4);
         for (let k = 0; k < spins; k++) {
-          const t = TEAMS[k % 4];
+          const t = TEAMS[(k + offset) % 4];
           res.textContent = t; els[i].dataset.t = t;
-          await sleep(45 + k * 6);
+          sfx.tick();
+          await sleep(40 + k * 7);
         }
       }
       els[i].dataset.t = group[i].team;
       res.innerHTML = `${group[i].team}<span>팀</span>`;
       els[i].classList.remove("land"); void els[i].offsetWidth; els[i].classList.add("land");
-      await sleep(260);
+      sfx.land(i);
+      await sleep(380);
     }
     await sleep(500);
 
+    // 팀 명단에 누적
     group.forEach((m) => teams[m.team].push(m));
     round++;
     const final = round >= plan.length;
-    renderBoard(new Set(group.map((m) => m.name)), final);
+    renderBoard(new Set(group.map((m) => m.name)), false);
+    await flyToBoard(group, els);
+
     if (final) {
+      renderBoard(new Set(), true);
       const banner = $("banner");
       const small = TEAMS.filter((t) => !bigTeams.includes(t));
       banner.textContent = !bigTeams.length || !small.length
         ? `추첨이 끝났습니다. 모든 팀이 ${teams.A.length}명입니다.`
         : `추첨이 끝났습니다. ${bigTeams.join("·")}팀이 ${teams[bigTeams[0]].length}명, 나머지 팀은 ${teams[small[0]].length}명입니다.`;
       banner.hidden = false;
+      sfx.fanfare();
+      confetti();
     }
-    busy = false; updateRoundLabel();
-    if (final) $("again").focus();
+    busy = false;
+    updateControls();
+    (final ? $("again") : $("next")).focus({ preventScroll: true });
+  }
+
+  // ---------- 마지막 축하 효과 ----------
+  function confetti() {
+    if (reduceMotion) return;
+    const cv = $("confetti");
+    const ctx = cv.getContext("2d");
+    cv.hidden = false;
+    cv.width = innerWidth; cv.height = innerHeight;
+    const css = getComputedStyle(document.documentElement);
+    const colors = ["--team-a", "--team-b", "--team-c", "--team-d"].map((v) => css.getPropertyValue(v).trim());
+    const parts = Array.from({ length: 160 }, () => ({
+      x: cv.width / 2 + (Math.random() - 0.5) * cv.width * 0.4, y: cv.height * 0.35,
+      vx: (Math.random() - 0.5) * 14, vy: -Math.random() * 14 - 4,
+      r: Math.random() * Math.PI, vr: (Math.random() - 0.5) * 0.3,
+      w: 6 + Math.random() * 6, h: 8 + Math.random() * 8, c: colors[Math.floor(Math.random() * 4)],
+    }));
+    const t0 = performance.now();
+    (function frame(now) {
+      const t = now - t0;
+      ctx.clearRect(0, 0, cv.width, cv.height);
+      parts.forEach((p) => {
+        p.vy += 0.35; p.vx *= 0.99; p.x += p.vx; p.y += p.vy; p.r += p.vr;
+        ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.r);
+        ctx.globalAlpha = Math.max(0, 1 - t / 3200);
+        ctx.fillStyle = p.c; ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h);
+        ctx.restore();
+      });
+      if (t < 3200) requestAnimationFrame(frame); else { ctx.clearRect(0, 0, cv.width, cv.height); cv.hidden = true; }
+    })(t0);
   }
 
   function startDraw() {
@@ -477,23 +664,24 @@ textarea { width: 100%; min-height: 250px; resize: vertical; border: 1px solid v
     $("setup").hidden = true;
     $("stage").hidden = false;
     $("banner").hidden = true;
-    $("slots").style.removeProperty("--cols");
-    showIdleSlots("‘다음 N명 뽑기’를 누르면 명단의 한 줄씩 팀이 공개됩니다.<br>스페이스바를 눌러도 됩니다.");
+    document.body.classList.add("drawing");
     renderBoard();
-    updateRoundLabel();
-    $("next").focus();
+    $("stage").scrollIntoView({ block: "start", behavior: reduceMotion ? "auto" : "smooth" });
+    // 시작 버튼을 누르면 바로 첫 번째 추첨이 진행된다
+    drawRound();
   }
 
   $("start").addEventListener("click", startDraw);
   // 같은 명단·같은 고정 설정으로 처음부터 다시 추첨
   $("again").addEventListener("click", () => { if (!busy) startDraw(); });
-
   $("next").addEventListener("click", drawRound);
   $("auto").addEventListener("click", async () => {
     if (autoRun) return;
     autoRun = true;
-    while (round < plan.length && autoRun) { await drawRound(); await sleep(500); }
+    updateControls();
+    while (round < plan.length && autoRun) { await drawRound(); await sleep(700); }
     autoRun = false;
+    if (plan.length) updateControls();
   });
   $("reset").addEventListener("click", () => {
     autoRun = false;
@@ -501,11 +689,13 @@ textarea { width: 100%; min-height: 250px; resize: vertical; border: 1px solid v
     plan = []; round = 0;
     $("stage").hidden = true;
     $("setup").hidden = false;
+    document.body.classList.remove("drawing");
     refreshSetup(); renderBoard();
   });
   document.addEventListener("keydown", (e) => {
-    if (e.code === "Space" && !$("stage").hidden && e.target.tagName !== "TEXTAREA" && e.target.tagName !== "SELECT") {
-      e.preventDefault(); drawRound();
+    if (e.code === "Space" && !$("stage").hidden && !["TEXTAREA", "SELECT", "BUTTON"].includes(e.target.tagName)) {
+      e.preventDefault();
+      if (round >= plan.length) { if (!busy) startDraw(); } else drawRound();
     }
   });
 
