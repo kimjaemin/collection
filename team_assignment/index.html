@@ -152,6 +152,10 @@ textarea { width: 100%; min-height: 250px; resize: vertical; border: 1px solid v
 .cta { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 20px; padding-top: 4px; }
 .upnext { color: var(--muted); font-size: 15px; min-width: 0; }
 .upnext b { color: var(--ink); }
+.more { flex: 1 1 340px; min-width: 0; display: grid; gap: 6px; }
+.more label { font-weight: 700; font-size: 15px; }
+.more input { width: 100%; font-size: 18px; padding: 12px 14px; border: 2px solid var(--ink); border-radius: 10px; background: var(--ground); }
+.more .error { font-size: 13px; }
 .btn.go { font-size: 22px; padding: 16px 34px; border-radius: 12px; }
 .btn.go:not(:disabled) { animation: breathe 1.8s ease-in-out infinite; }
 @keyframes breathe { 50% { transform: scale(1.04); } }
@@ -270,6 +274,11 @@ textarea { width: 100%; min-height: 250px; resize: vertical; border: 1px solid v
     <p class="banner" id="banner" hidden></p>
     <div class="cta">
       <div class="upnext" id="upnext"></div>
+      <div class="more" id="more" hidden>
+        <label for="more-names" id="more-label">다음 학생 이름 (4~5명, 쉼표로 구분)</label>
+        <input id="more-names" type="text" autocomplete="off" enterkeyhint="go" placeholder="예: 홍길동, 김철수, 이영희, 박민수">
+        <p class="error" id="more-error" role="alert"></p>
+      </div>
       <div class="actions">
         <span class="tip" id="tip">스페이스바로도 시작할 수 있어요</span>
         <button type="button" class="btn go" id="next">이어서 추첨 시작</button>
@@ -290,6 +299,7 @@ textarea { width: 100%; min-height: 250px; resize: vertical; border: 1px solid v
 <script>
 (() => {
   const TEAMS = ["A", "B", "C", "D"];
+  const TARGET = 41;   // 전체 인원 (수강생 39 + 청강생 2). 이만큼 배치되면 추첨 완료
   const MIN_GROUP = 4;
   const MAX_GROUP = 5;
   const $ = (id) => document.getElementById(id);
@@ -501,7 +511,7 @@ textarea { width: 100%; min-height: 250px; resize: vertical; border: 1px solid v
     note.hidden = !placed.size;
     note.textContent = `추첨으로 팀이 정해진 ${placed.size}명은 자동으로 고정되었습니다. 남은 ${names.filter((n) => !placed.has(n)).length}명만 이어서 추첨합니다.`;
 
-    $("total").textContent = names.length;
+    $("total").textContent = Math.max(names.length, TARGET);
     const remaining = names.filter((n) => !placed.has(n)).length;
     const ok = (placed.size ? remaining > 0 : names.length >= MIN_GROUP) && !problems.length;
     $("start").disabled = !ok;
@@ -599,29 +609,43 @@ textarea { width: 100%; min-height: 250px; resize: vertical; border: 1px solid v
     });
   }
 
+  // 입력한 학생을 모두 뽑았지만 아직 전체 인원이 안 됨 → 다음 학생을 입력받는다
+  const placedCount = () => TEAMS.reduce((n, t) => n + teams[t].length, 0);
+  const needMore = () => round >= plan.length && placedCount() < TARGET;
+  const isComplete = () => round >= plan.length && plan.length > 0 && !needMore();
+
   function updateControls() {
-    const total = plan.length;
-    const done = round >= total;
+    const done = isComplete();
+    const waiting = needMore();
     const label = $("round-label");
     // busy: 지금 round번째 줄을 추첨하는 중 / 아니면 방금 끝난 줄의 결과를 보여주는 중
     label.textContent = done ? "추첨 완료" : busy ? `${round + 1}번째 추첨` : `${round}번째 추첨 결과`;
     const small = document.createElement("small");
-    small.textContent = `${Math.min(round, total)} / ${total}회 완료`;
+    small.textContent = `${round}회 완료 · ${placedCount()} / ${TARGET}명 배치`;
     label.append(small);
 
     $("next").hidden = done;
     $("again").hidden = !done;
     $("tip").hidden = done || busy;
     $("next").disabled = busy;
-    $("auto").disabled = busy || done || autoRun;
+    $("auto").disabled = busy || done || waiting || autoRun;
+    $("more").hidden = !waiting || busy;
+    if (waiting) $("tip").hidden = true;
+    $("upnext").hidden = waiting && !busy;
     $("reset").disabled = busy;
     $("restart").disabled = busy;
     $("restart").hidden = done;
     if (!done) $("next").textContent = busy ? "추첨 중…" : "이어서 추첨 시작";
+    if (waiting && !busy) {
+      const left = TARGET - placedCount();
+      $("more-label").textContent = left <= MAX_GROUP
+        ? `다음 학생 이름 (남은 ${left}명, 쉼표로 구분)`
+        : `다음 학생 이름 (4~5명, 쉼표로 구분 · 남은 ${left}명)`;
+    }
 
     const up = $("upnext");
     up.textContent = "";
-    if (!done && !busy) {
+    if (!done && !busy && !waiting) {
       up.append(`다음 차례 (${round + 1}번째 추첨) `);
       const b = document.createElement("b");
       b.textContent = plan[round].map((m) => m.name).join(", ");
@@ -717,7 +741,7 @@ textarea { width: 100%; min-height: 250px; resize: vertical; border: 1px solid v
     group.forEach((m) => teams[m.team].push(m));
     round++;
     saveProgress();
-    const final = round >= plan.length;
+    const final = isComplete();
     renderBoard(new Set(group.map((m) => m.name)), false);
     await flyToBoard(group, els);
 
@@ -729,12 +753,16 @@ textarea { width: 100%; min-height: 250px; resize: vertical; border: 1px solid v
     busy = false;
     updateControls();
     const nextBtn = final ? $("again") : $("next");
-    nextBtn.focus({ preventScroll: true });
+    if (needMore()) { $("more-names").value = ""; $("more-error").textContent = ""; $("more-names").focus({ preventScroll: true }); }
+    else nextBtn.focus({ preventScroll: true });
     // 결과 바로 아래의 '이어서 추첨 시작' 버튼이 화면에 보이도록
     nextBtn.scrollIntoView({ block: "nearest", behavior: reduceMotion ? "auto" : "smooth" });
   }
 
   function showFinal() {
+    const sizes = TEAMS.map((t) => teams[t].length);
+    const max = Math.max(...sizes), min = Math.min(...sizes);
+    bigTeams = max === min ? [] : TEAMS.filter((t) => teams[t].length === max);
     renderBoard(new Set(), true);
     const banner = $("banner");
     const small = TEAMS.filter((t) => !bigTeams.includes(t));
@@ -839,7 +867,31 @@ textarea { width: 100%; min-height: 250px; resize: vertical; border: 1px solid v
   $("again").addEventListener("click", askRestart);
   $("restart").addEventListener("click", askRestart);
   $("restart-setup").addEventListener("click", askRestart);
-  $("next").addEventListener("click", drawRound);
+  function addMoreAndDraw() {
+    if (busy) return;
+    const err = $("more-error");
+    const batch = $("more-names").value.split(/[,，、\s]+/).map((x) => x.trim()).filter(Boolean);
+    const left = TARGET - placedCount();
+    const all = parseGroups($("names").value).flat();
+    const dupes = batch.filter((n, i) => batch.indexOf(n) !== i || all.includes(n));
+    const lo = Math.min(MIN_GROUP, left), hi = Math.min(MAX_GROUP, left);
+    if (!batch.length) { err.textContent = "학생 이름을 입력하세요."; $("more-names").focus(); return; }
+    if (dupes.length) { err.textContent = `이미 있는 이름입니다: ${[...new Set(dupes)].join(", ")}. 동명이인은 '김민수A'처럼 구분해 주세요.`; return; }
+    if (batch.length < lo || batch.length > hi) {
+      err.textContent = lo === hi ? `${lo}명을 입력하세요. (입력: ${batch.length}명)` : `한 번에 ${lo}~${hi}명을 입력하세요. (입력: ${batch.length}명)`;
+      return;
+    }
+    err.textContent = "";
+    const text = $("names").value.replace(/\s+$/, "");
+    $("names").value = (text ? text + "\n" : "") + batch.join(", ");
+    save();
+    $("more-names").value = "";
+    startDraw();
+  }
+
+  // 남은 줄이 있으면 다음 줄을, 없으면 입력한 학생을 추첨한다
+  $("next").addEventListener("click", () => { if (round < plan.length) drawRound(); else addMoreAndDraw(); });
+  $("more-names").addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.isComposing) { e.preventDefault(); addMoreAndDraw(); } });
   $("auto").addEventListener("click", async () => {
     if (autoRun) return;
     autoRun = true;
@@ -854,10 +906,10 @@ textarea { width: 100%; min-height: 250px; resize: vertical; border: 1px solid v
     $("stage").hidden = true;
     $("setup").hidden = false;
     document.body.classList.remove("drawing");
-    refreshSetup(); renderBoard(new Set(), round > 0 && round >= plan.length);
+    refreshSetup(); renderBoard(new Set(), isComplete());
   });
   document.addEventListener("keydown", (e) => {
-    if (e.code === "Space" && !$("stage").hidden && !["TEXTAREA", "SELECT", "BUTTON"].includes(e.target.tagName)) {
+    if (e.code === "Space" && !$("stage").hidden && !["TEXTAREA", "SELECT", "BUTTON", "INPUT"].includes(e.target.tagName)) {
       e.preventDefault();
       if (round < plan.length && $("confirm").hidden) drawRound();
     }
@@ -886,9 +938,12 @@ textarea { width: 100%; min-height: 250px; resize: vertical; border: 1px solid v
     }
     showStage();
     $("banner").hidden = true;
-    if (round >= plan.length) {
+    if (isComplete()) {
       showFinal();
       showIdleSlots("지난 추첨 결과를 불러왔습니다. 다시 하려면 ‘처음부터 다시 추첨’을 누르세요.");
+    } else if (needMore()) {
+      renderBoard();
+      showIdleSlots(`지난 추첨 결과를 불러왔습니다. 지금까지 ${placedCount()}명이 배치되었습니다.<br>아래에 다음 학생 이름을 입력하고 ‘이어서 추첨 시작’을 누르세요.`);
     } else {
       renderBoard();
       showIdleSlots("지난 추첨 결과를 불러왔습니다. 배치된 학생은 팀이 고정되어 있습니다.<br>‘이어서 추첨 시작’을 누르면 계속 추첨합니다.");
