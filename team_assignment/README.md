@@ -40,5 +40,3 @@ python3 team_assign.py sample_names.txt --seed 42
 python3 team_assign.py sample_names.txt --fix 김제민=A --fix 학생05=C
 ```
 직접 입력 방식에서는 이름을 모두 입력한 뒤 고정할 학생을 물어봅니다. (`김제민=A` 형식, 없으면 엔터)
-```bash
-```
