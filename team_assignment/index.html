@@ -100,7 +100,7 @@ textarea { width: 100%; min-height: 250px; resize: vertical; border: 1px solid v
 .chip .letter { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; color: #fff; font-family: var(--display); font-size: 14px; }
 .chip button { border: 0; background: none; color: var(--muted); padding: 0 6px; font-size: 16px; line-height: 1; }
 .empty { color: var(--muted); font-size: 13px; }
-.error { color: var(--danger); font-size: 14px; font-weight: 500; margin: 0; }
+.error { color: var(--danger); font-size: 14px; font-weight: 500; margin: 0; white-space: pre-line; }
 .rules { margin: 16px 0 0; padding: 14px; border-radius: 10px; background: var(--ground); font-size: 13px; color: var(--muted); display: grid; gap: 4px; }
 .rules strong { color: var(--ink); }
 .actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
@@ -110,7 +110,7 @@ textarea { width: 100%; min-height: 250px; resize: vertical; border: 1px solid v
 .stage-top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
 .round-label { font-family: var(--display); font-size: 26px; }
 .round-label small { font-family: var(--body); font-size: 14px; color: var(--muted); margin-left: 8px; }
-.slots { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
+.slots { display: grid; grid-template-columns: repeat(var(--cols, 4), minmax(0, 1fr)); gap: 14px; }
 @media (max-width: 640px) { .slots { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .slot { border: 2px dashed var(--line); border-radius: 12px; min-height: 150px; padding: 14px; display: grid; align-content: space-between; gap: 10px; background: var(--ground); transition: background-color .3s, border-color .3s; }
 .slot.filled { border-style: solid; }
@@ -162,7 +162,7 @@ textarea { width: 100%; min-height: 250px; resize: vertical; border: 1px solid v
   <header>
     <div>
       <h1>우리 반 팀 추첨<span class="dots" aria-hidden="true"><i style="background:var(--team-a)"></i><i style="background:var(--team-b)"></i><i style="background:var(--team-c)"></i><i style="background:var(--team-d)"></i></span></h1>
-      <p class="sub">4명씩 뽑아 A·B·C·D팀에 한 명씩 배치합니다. 마지막에 남은 학생이 들어가는 팀은 11명이 됩니다.</p>
+      <p class="sub">한 줄씩 4~5명을 뽑아 A·B·C·D팀에 나눠 배치합니다. 5명인 줄에서는 한 팀에 2명이 들어가며, 그 팀이 11명 팀이 됩니다.</p>
     </div>
     <div class="progress" aria-live="polite"><b id="placed">0</b> / <span id="total">0</span>명 배치</div>
   </header>
@@ -171,7 +171,7 @@ textarea { width: 100%; min-height: 250px; resize: vertical; border: 1px solid v
   <section class="panel setup" id="setup">
     <div>
       <h2>학생 명단 <span class="tag">예시</span></h2>
-      <p class="hint">한 줄에 4명씩, 쉼표로 구분해서 입력하세요. 입력한 순서대로 4명씩 추첨합니다.</p>
+      <p class="hint">한 줄에 4명 또는 5명씩, 쉼표로 구분해서 입력하세요. 한 줄이 한 번의 추첨이 됩니다.</p>
       <textarea id="names" spellcheck="false" aria-label="학생 명단"></textarea>
       <div class="count" id="count"></div>
     </div>
@@ -191,8 +191,8 @@ textarea { width: 100%; min-height: 250px; resize: vertical; border: 1px solid v
       <div class="chips" id="chips"></div>
       <div class="rules">
         <div><strong>팀 인원</strong> 41명 기준 10명 팀 3개, 11명 팀 1개</div>
-        <div><strong>배치 방식</strong> 뽑힌 4명은 서로 다른 팀으로 들어감</div>
-        <div><strong>11명 팀</strong> 추첨 시작 때 무작위로 정해지며 마지막 차례에 공개됨</div>
+        <div><strong>배치 방식</strong> 한 줄의 4명은 서로 다른 팀으로, 5명이면 한 팀에만 2명이 들어감</div>
+        <div><strong>11명 팀</strong> 추첨 시작 때 무작위로 정해지며 추첨이 끝나면 공개됨</div>
       </div>
     </div>
     <div class="actions" style="grid-column: 1 / -1">
@@ -206,7 +206,8 @@ textarea { width: 100%; min-height: 250px; resize: vertical; border: 1px solid v
     <div class="stage-top">
       <div class="round-label" id="round-label"></div>
       <div class="actions">
-        <button type="button" class="btn big" id="next">다음 4명 뽑기</button>
+        <button type="button" class="btn big" id="next">다음 줄 뽑기</button>
+        <button type="button" class="btn big" id="again" hidden>같은 명단으로 다시 추첨</button>
         <button type="button" class="btn ghost" id="auto">끝까지 자동 진행</button>
         <button type="button" class="btn ghost" id="reset">명단 수정</button>
       </div>
@@ -225,7 +226,8 @@ textarea { width: 100%; min-height: 250px; resize: vertical; border: 1px solid v
 <script>
 (() => {
   const TEAMS = ["A", "B", "C", "D"];
-  const GROUP = 4;
+  const MIN_GROUP = 4;
+  const MAX_GROUP = 5;
   const $ = (id) => document.getElementById(id);
   const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   const sleep = (ms) => new Promise((r) => setTimeout(r, reduceMotion ? Math.min(ms, 120) : ms));
@@ -235,7 +237,11 @@ textarea { width: 100%; min-height: 250px; resize: vertical; border: 1px solid v
   const sampleNames = ["김제민"];
   for (let i = 2; i <= 39; i++) sampleNames.push("학생" + String(i).padStart(2, "0"));
   sampleNames.push("청강생01", "청강생02");
-  for (let i = 0; i < sampleNames.length; i += GROUP) SAMPLE.push(sampleNames.slice(i, i + GROUP).join(", "));
+  // 4명씩 9줄 + 5명 1줄 = 41명
+  for (let i = 0, size; i < sampleNames.length; i += size) {
+    size = sampleNames.length - i === 5 ? 5 : 4;
+    SAMPLE.push(sampleNames.slice(i, i + size).join(", "));
+  }
 
   const store = {
     get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
@@ -252,17 +258,21 @@ textarea { width: 100%; min-height: 250px; resize: vertical; border: 1px solid v
   let pickTeam = "A";
   let plan = [];        // [[{name, team, fixed}], ...] 라운드별 결과
   let round = 0;
-  let bigTeam = null;
+  let bigTeams = [];
   let busy = false;
   let autoRun = false;
   const teams = { A: [], B: [], C: [], D: [] };
 
-  const parseNames = (text) => text.split(/[\n,，、]+/).map((s) => s.trim()).filter(Boolean);
+  // 한 줄 = 한 번의 추첨 묶음
+  const parseGroups = (text) => text.split("\n")
+    .map((line) => line.split(/[,，、]+/).map((s) => s.trim()).filter(Boolean))
+    .filter((g) => g.length);
   const shuffle = (arr) => { for (let i = arr.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [arr[i], arr[j]] = [arr[j], arr[i]]; } return arr; };
   const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
 
   // ---------- 배치 알고리즘 (team_assign.py 와 동일) ----------
-  function buildPlan(names, fixedMap) {
+  function buildPlan(groups, fixedMap) {
+    const names = groups.flat();
     const base = Math.floor(names.length / TEAMS.length);
     const extra = names.length % TEAMS.length;
     const fixedCount = { A: 0, B: 0, C: 0, D: 0 };
@@ -276,8 +286,10 @@ textarea { width: 100%; min-height: 250px; resize: vertical; border: 1px solid v
     const reserved = { ...fixedCount };
     const count = { A: 0, B: 0, C: 0, D: 0 };
     const rounds = [];
-    for (let i = 0; i < names.length; i += GROUP) {
-      const group = names.slice(i, i + GROUP);
+    const room = (t) => cap[t] - count[t] - reserved[t];
+    // 남은 자리가 가장 많은 팀 중에서 무작위로 고른다 (팀 인원이 끝까지 고르게 유지됨)
+    const pickRoomiest = (list) => { const m = Math.max(...list.map(room)); return pick(list.filter((t) => room(t) === m)); };
+    for (const group of groups) {
       const used = new Set();
       const result = new Map();
       group.filter((n) => fixedMap.has(n)).forEach((n) => {
@@ -285,29 +297,36 @@ textarea { width: 100%; min-height: 250px; resize: vertical; border: 1px solid v
         result.set(n, t); count[t]++; reserved[t]--; used.add(t);
       });
       shuffle(group.filter((n) => !fixedMap.has(n))).forEach((n) => {
-        const open = TEAMS.filter((t) => cap[t] - count[t] - reserved[t] > 0);
+        const open = TEAMS.filter((t) => room(t) > 0);
         const preferred = open.filter((t) => !used.has(t));
-        const t = pick(preferred.length ? preferred : open);
+        const t = pickRoomiest(preferred.length ? preferred : open);
         result.set(n, t); count[t]++; used.add(t);
       });
       rounds.push(group.map((n) => ({ name: n, team: result.get(n), fixed: fixedMap.has(n) })));
     }
-    return { rounds, big };
+    return { rounds, big, base };
   }
 
   // ---------- 설정 화면 ----------
-  function currentNames() { return parseNames($("names").value); }
-
   function refreshSetup() {
-    const names = currentNames();
+    const groups = parseGroups($("names").value);
+    const names = groups.flat();
     const dupes = [...new Set(names.filter((n, i) => names.indexOf(n) !== i))];
     [...fixed.keys()].forEach((n) => { if (!names.includes(n)) fixed.delete(n); });
 
     const count = $("count");
-    const rounds = Math.ceil(names.length / GROUP);
-    count.textContent = `${names.length}명 입력됨 · ${rounds}번에 나눠 추첨` + (names.length === 41 ? " · 41명 확인" : ` · 41명과 ${names.length > 41 ? "+" : ""}${names.length - 41}명 차이`);
+    count.textContent = `${names.length}명 입력됨 · ${groups.length}번에 나눠 추첨` + (names.length === 41 ? " · 41명 확인" : ` · 41명과 ${names.length > 41 ? "+" : ""}${names.length - 41}명 차이`);
     count.className = "count" + (names.length === 41 && !dupes.length ? " ok" : "");
-    $("error").textContent = dupes.length ? `이름이 중복되었습니다: ${dupes.join(", ")}. 동명이인은 '김민수A'처럼 구분해 주세요.` : "";
+    // 줄마다 4~5명 (마지막 줄만 4명보다 적어도 됨)
+    const badLines = [];
+    groups.forEach((g, i) => {
+      const last = i === groups.length - 1;
+      if (g.length > MAX_GROUP || (g.length < MIN_GROUP && !last)) badLines.push(`${i + 1}번째 줄(${g.length}명)`);
+    });
+    const problems = [];
+    if (dupes.length) problems.push(`이름이 중복되었습니다: ${dupes.join(", ")}. 동명이인은 '김민수A'처럼 구분해 주세요.`);
+    if (badLines.length) problems.push(`한 줄에는 ${MIN_GROUP}~${MAX_GROUP}명을 입력해 주세요: ${badLines.join(", ")}`);
+    $("error").textContent = problems.join("\n");
 
     const sel = $("fix-name");
     const prev = sel.value;
@@ -328,8 +347,9 @@ textarea { width: 100%; min-height: 250px; resize: vertical; border: 1px solid v
       chips.append(c);
     });
     $("total").textContent = names.length;
-    $("start").disabled = names.length < GROUP || dupes.length > 0;
-    return { names, dupes };
+    const ok = names.length >= MIN_GROUP && !problems.length;
+    $("start").disabled = !ok;
+    return { groups, names, ok };
   }
 
   function save() {
@@ -354,7 +374,7 @@ textarea { width: 100%; min-height: 250px; resize: vertical; border: 1px solid v
     board.innerHTML = "";
     TEAMS.forEach((t) => {
       const col = document.createElement("div");
-      col.className = "team" + (final && t === bigTeam ? " big" : "");
+      col.className = "team" + (final && bigTeams.includes(t) ? " big" : "");
       col.dataset.t = t;
       col.innerHTML = `<div class="team-head"><div class="t">${t}<span>팀</span></div><div class="n">${teams[t].length}명</div></div><ol></ol>`;
       const ol = col.querySelector("ol");
@@ -382,8 +402,13 @@ textarea { width: 100%; min-height: 250px; resize: vertical; border: 1px solid v
     const small = document.createElement("small");
     small.textContent = `${Math.min(round, total)} / ${total}회 진행`;
     label.append(small);
-    $("next").disabled = busy || round >= total;
-    $("auto").disabled = busy || round >= total;
+    const done = round >= total;
+    $("next").hidden = done;
+    $("auto").hidden = done;
+    $("again").hidden = !done;
+    if (!done) $("next").textContent = `다음 ${plan[round].length}명 뽑기`;
+    $("next").disabled = busy;
+    $("auto").disabled = busy;
     $("reset").disabled = busy;
   }
 
@@ -393,6 +418,7 @@ textarea { width: 100%; min-height: 250px; resize: vertical; border: 1px solid v
     const group = plan[round];
     const slots = $("slots");
     slots.innerHTML = "";
+    slots.style.setProperty("--cols", group.length);
     const els = group.map((m) => {
       const s = document.createElement("div");
       s.className = "slot filled";
@@ -427,30 +453,40 @@ textarea { width: 100%; min-height: 250px; resize: vertical; border: 1px solid v
     renderBoard(new Set(group.map((m) => m.name)), final);
     if (final) {
       const banner = $("banner");
-      banner.textContent = `추첨이 끝났습니다. ${bigTeam}팀이 ${teams[bigTeam].length}명, 나머지 팀은 ${teams[TEAMS.find((t) => t !== bigTeam)].length}명입니다.`;
-      banner.hidden = !bigTeam;
+      const small = TEAMS.filter((t) => !bigTeams.includes(t));
+      banner.textContent = !bigTeams.length || !small.length
+        ? `추첨이 끝났습니다. 모든 팀이 ${teams.A.length}명입니다.`
+        : `추첨이 끝났습니다. ${bigTeams.join("·")}팀이 ${teams[bigTeams[0]].length}명, 나머지 팀은 ${teams[small[0]].length}명입니다.`;
+      banner.hidden = false;
     }
     busy = false; updateRoundLabel();
+    if (final) $("again").focus();
   }
 
-  $("start").addEventListener("click", () => {
-    const { names, dupes } = refreshSetup();
-    if (dupes.length || names.length < GROUP) return;
+  function startDraw() {
+    const { groups, ok } = refreshSetup();
+    if (!ok) return;
     let built;
-    try { built = buildPlan(names, fixed); }
+    try { built = buildPlan(groups, fixed); }
     catch (err) { $("error").textContent = err.message; return; }
+    autoRun = false;
     plan = built.rounds;
-    bigTeam = names.length % TEAMS.length === 1 ? built.big[0] : null;
+    bigTeams = built.big;
     round = 0;
     TEAMS.forEach((t) => teams[t] = []);
     $("setup").hidden = true;
     $("stage").hidden = false;
     $("banner").hidden = true;
-    showIdleSlots("‘다음 4명 뽑기’를 누르면 명단 순서대로 4명씩 팀이 공개됩니다.<br>스페이스바를 눌러도 됩니다.");
+    $("slots").style.removeProperty("--cols");
+    showIdleSlots("‘다음 N명 뽑기’를 누르면 명단의 한 줄씩 팀이 공개됩니다.<br>스페이스바를 눌러도 됩니다.");
     renderBoard();
     updateRoundLabel();
     $("next").focus();
-  });
+  }
+
+  $("start").addEventListener("click", startDraw);
+  // 같은 명단·같은 고정 설정으로 처음부터 다시 추첨
+  $("again").addEventListener("click", () => { if (!busy) startDraw(); });
 
   $("next").addEventListener("click", drawRound);
   $("auto").addEventListener("click", async () => {

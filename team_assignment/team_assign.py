@@ -3,14 +3,15 @@
 그룹과제 팀 편성 프로그램
 
 - 수강생 39명 + 청강생 2명 = 총 41명
-- 학생 이름을 4명씩 입력받아, 매 4명을 A, B, C, D팀에 한 명씩 랜덤 배치
-- 4명 단위로 나누고 남은 학생(41명이면 1명)은 랜덤한 팀에 배치
-  -> 결과: 10명 팀 3개 + 11명 팀 1개
+- 학생 이름을 한 줄에 4~5명씩 입력받아, 한 줄(묶음)씩 A, B, C, D팀에 랜덤 배치
+  - 4명 묶음: 네 팀에 한 명씩
+  - 5명 묶음: 네 팀에 한 명씩 + 한 팀에 한 명 더
+  -> 결과(41명): 10명 팀 3개 + 11명 팀 1개
 - 특정 학생을 원하는 팀에 고정 배치 가능 (예: 김제민=A)
 
 사용법:
     python team_assign.py                 # 4명씩 직접 입력
-    python team_assign.py names.txt       # 파일에서 이름 읽기 (한 줄에 한 명 또는 쉼표 구분)
+    python team_assign.py names.txt       # 파일에서 이름 읽기 (한 줄에 4~5명, 쉼표 구분)
     python team_assign.py names.txt --seed 42   # 결과 재현용 시드 지정
     python team_assign.py names.txt --fix 김제민=A --fix 홍길동=C   # 특정 학생 팀 고정
 """
@@ -21,38 +22,59 @@ import sys
 
 TEAMS = ["A", "B", "C", "D"]
 TOTAL_STUDENTS = 41
-GROUP_SIZE = len(TEAMS)  # 4명씩 입력/배치
+MIN_GROUP, MAX_GROUP = 4, 5  # 한 번에 입력/배치하는 인원
 
 
 def parse_names(text):
     """쉼표 또는 줄바꿈으로 구분된 이름 목록을 리스트로 변환한다."""
-    names = []
+    return [n for g in parse_groups(text) for n in g]
+
+
+def parse_groups(text):
+    """한 줄을 하나의 묶음으로 보고, 쉼표로 구분된 이름을 읽는다."""
+    groups = []
     for line in text.splitlines():
-        for name in line.split(","):
-            name = name.strip()
-            if name:
-                names.append(name)
-    return names
+        group = [n.strip() for n in line.split(",") if n.strip()]
+        if group:
+            groups.append(group)
+    return groups
 
 
-def input_names_interactively(total=TOTAL_STUDENTS):
-    """학생 이름을 4명씩 입력받는다."""
-    names = []
-    print(f"학생 {total}명의 이름을 {GROUP_SIZE}명씩 쉼표(,)로 구분하여 입력하세요.")
+def normalize_groups(groups):
+    """
+    묶음 크기를 확인한다. 한 줄에 한 명씩 적힌 파일이면 4명씩 묶는다.
+    각 묶음은 4~5명이어야 하며, 마지막 묶음만 4명보다 적어도 된다.
+    """
+    if groups and all(len(g) == 1 for g in groups):
+        names = [g[0] for g in groups]
+        groups = [names[i:i + MIN_GROUP] for i in range(0, len(names), MIN_GROUP)]
+    for i, g in enumerate(groups):
+        last = i == len(groups) - 1
+        if len(g) > MAX_GROUP or (len(g) < MIN_GROUP and not last):
+            raise ValueError(f"{i + 1}번째 줄은 {len(g)}명입니다. 한 줄에는 {MIN_GROUP}~{MAX_GROUP}명을 입력하세요.")
+    return groups
+
+
+def input_groups_interactively(total=TOTAL_STUDENTS):
+    """학생 이름을 한 번에 4~5명씩 입력받는다."""
+    groups, names = [], []
+    print(f"학생 {total}명의 이름을 한 번에 {MIN_GROUP}~{MAX_GROUP}명씩 쉼표(,)로 구분하여 입력하세요.")
     while len(names) < total:
-        need = min(GROUP_SIZE, total - len(names))
-        round_no = len(names) // GROUP_SIZE + 1
-        line = input(f"[{round_no}번째 입력] {need}명 ({len(names)}/{total}): ")
+        left = total - len(names)
+        lo, hi = min(MIN_GROUP, left), min(MAX_GROUP, left)
+        need = f"{lo}명" if lo == hi else f"{lo}~{hi}명"
+        line = input(f"[{len(groups) + 1}번째 입력] {need} ({len(names)}/{total}): ")
         batch = parse_names(line)
-        if len(batch) != need:
-            print(f"  -> {need}명을 입력해야 합니다. (입력된 인원: {len(batch)}명) 다시 입력하세요.")
+        if not lo <= len(batch) <= hi:
+            print(f"  -> {need}을 입력해야 합니다. (입력된 인원: {len(batch)}명) 다시 입력하세요.")
             continue
         duplicated = [n for n in batch if n in names or batch.count(n) > 1]
         if duplicated:
             print(f"  -> 중복된 이름이 있습니다: {', '.join(sorted(set(duplicated)))}. 다시 입력하세요.")
             continue
+        groups.append(batch)
         names.extend(batch)
-    return names
+    return groups
 
 
 def team_capacities(total, fixed, rng=random):
@@ -78,16 +100,17 @@ def team_capacities(total, fixed, rng=random):
     return {t: base + (1 if t in big else 0) for t in TEAMS}
 
 
-def assign_teams(names, fixed=None, rng=random):
+def assign_teams(groups, fixed=None, rng=random):
     """
-    이름을 4명씩 묶어 각 묶음의 학생을 A, B, C, D팀에 한 명씩 랜덤 배치한다.
-    4명으로 나누어 떨어지지 않고 남은 학생은 서로 다른 팀에 랜덤 배치한다.
+    묶음(4~5명)마다 학생을 A, B, C, D팀에 한 명씩 랜덤 배치한다.
+    5명 묶음에서는 남은 자리가 가장 많은 팀에 한 명이 더 들어간다.
 
     fixed: {이름: 팀} 형태로 주면 해당 학생은 그 팀에 고정된다.
     고정 학생이 있는 묶음에서는 나머지 학생이 남은 팀으로 랜덤 배치되며,
     팀 정원(10명/11명)은 항상 지켜진다.
     """
     fixed = dict(fixed or {})
+    names = [n for g in groups for n in g]
     unknown = [n for n in fixed if n not in names]
     if unknown:
         raise ValueError(f"명단에 없는 학생입니다: {', '.join(unknown)}")
@@ -102,8 +125,16 @@ def assign_teams(names, fixed=None, rng=random):
         reserved[team] += 1
 
     teams = {team: [] for team in TEAMS}
-    for i in range(0, len(names), GROUP_SIZE):
-        group = names[i:i + GROUP_SIZE]
+
+    def room(t):
+        return capacity[t] - len(teams[t]) - reserved[t]
+
+    def pick_roomiest(candidates):
+        # 남은 자리가 가장 많은 팀 중에서 랜덤 선택 -> 팀 인원이 끝까지 고르게 유지됨
+        best = max(room(t) for t in candidates)
+        return rng.choice([t for t in candidates if room(t) == best])
+
+    for group in groups:
         used = set()
 
         for name in group:
@@ -116,10 +147,9 @@ def assign_teams(names, fixed=None, rng=random):
         free = [n for n in group if n not in fixed]
         rng.shuffle(free)
         for name in free:
-            open_teams = [t for t in TEAMS
-                          if capacity[t] - len(teams[t]) - reserved[t] > 0]
+            open_teams = [t for t in TEAMS if room(t) > 0]
             preferred = [t for t in open_teams if t not in used]
-            team = rng.choice(preferred or open_teams)
+            team = pick_roomiest(preferred or open_teams)
             teams[team].append(name)
             used.add(team)
 
@@ -173,7 +203,7 @@ def print_teams(teams, fixed=None):
 
 def main():
     parser = argparse.ArgumentParser(description="학생들을 A, B, C, D팀으로 랜덤 배치합니다.")
-    parser.add_argument("file", nargs="?", help="학생 이름 파일 (한 줄에 한 명 또는 쉼표 구분)")
+    parser.add_argument("file", nargs="?", help="학생 이름 파일 (한 줄에 4~5명 쉼표 구분, 또는 한 줄에 한 명)")
     parser.add_argument("--seed", type=int, help="랜덤 시드 (같은 결과를 다시 얻고 싶을 때)")
     parser.add_argument("--fix", action="append", default=[], metavar="이름=팀",
                         help="특정 학생을 팀에 고정 (예: --fix 김제민=A, 여러 번 사용 가능)")
@@ -183,20 +213,23 @@ def main():
 
     if args.file:
         with open(args.file, encoding="utf-8") as f:
-            names = parse_names(f.read())
+            groups = parse_groups(f.read())
+        names = [n for g in groups for n in g]
         if len(names) != TOTAL_STUDENTS:
             print(f"경고: 이름이 {len(names)}명입니다. (예상 인원: {TOTAL_STUDENTS}명)", file=sys.stderr)
         if len(set(names)) != len(names):
             print("오류: 중복된 이름이 있습니다.", file=sys.stderr)
             sys.exit(1)
     else:
-        names = input_names_interactively()
+        groups = input_groups_interactively()
+        names = [n for g in groups for n in g]
 
     try:
+        groups = normalize_groups(groups)
         fixed = parse_fixed(args.fix)
         if not args.file and not fixed:
             fixed = input_fixed_interactively(names)
-        teams = assign_teams(names, fixed, rng)
+        teams = assign_teams(groups, fixed, rng)
     except ValueError as e:
         print(f"오류: {e}", file=sys.stderr)
         sys.exit(1)
