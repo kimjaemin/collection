@@ -387,6 +387,60 @@ textarea { width: 100%; min-height: 250px; resize: vertical; border: 1px solid v
   function saveProgress() {
     if (round > 0) store.set("team-draw-progress", JSON.stringify({ plan, round, bigTeams }));
     else store.del("team-draw-progress");
+    pushRemote();
+  }
+
+  // ---------- 서버 저장 (Claude 화면에서 열었을 때) ----------
+  // 브라우저 저장소는 앱·기기에 따라 비어 있을 수 있어서, 진행 상황을 이 페이지 전용 저장소에도 저장한다.
+  let remote = null;          // db 문서 참조 (없으면 브라우저 저장소만 사용)
+  let touched = false;        // 이번에 연 뒤 사용자가 추첨이나 명단을 바꿨는지
+  let writeChain = Promise.resolve();
+  function remoteBody() {
+    return {
+      names: $("names").value,
+      fixed: [...fixed].map(([name, team]) => ({ name, team })),
+      plan: plan.map((g) => ({ members: g })),
+      round, bigTeams, savedAt: Date.now(),
+    };
+  }
+  function pushRemote() {
+    if (!remote) return;
+    const body = remoteBody();
+    writeChain = writeChain.then(() => remote.set(body)).catch(() => {});
+  }
+  let pushTimer = null;
+  function pushRemoteSoon() { clearTimeout(pushTimer); pushTimer = setTimeout(pushRemote, 1200); }
+
+  function applyRemote(d) {
+    if (typeof d.names === "string" && d.names.trim()) $("names").value = d.names;
+    if (Array.isArray(d.fixed)) fixed = new Map(d.fixed.filter((x) => x && TEAMS.includes(x.team)).map((x) => [x.name, x.team]));
+    const p = Array.isArray(d.plan) ? d.plan.map((g) => (g && Array.isArray(g.members) ? g.members : [])) : [];
+    const r = Number(d.round) || 0;
+    plan = r > 0 && r <= p.length ? p : [];
+    round = plan.length ? r : 0;
+    bigTeams = Array.isArray(d.bigTeams) ? d.bigTeams : [];
+    TEAMS.forEach((t) => teams[t] = []);
+    plan.slice(0, round).flat().forEach((m) => { if (teams[m.team]) teams[m.team].push(m); });
+    store.set("team-draw-names", $("names").value);
+    store.set("team-draw-fixed", JSON.stringify([...fixed]));
+    if (round > 0) store.set("team-draw-progress", JSON.stringify({ plan, round, bigTeams }));
+    else store.del("team-draw-progress");
+  }
+
+  async function connectRemote() {
+    if (!window.claude || typeof window.claude.use !== "function") return;
+    let db = null;
+    try { db = await window.claude.use("db"); } catch (e) { return; }
+    if (!db) return;
+    const ref = db.doc("draws/current");
+    let snap;
+    try { snap = await ref.get(); } catch (e) { return; }
+    remote = ref;
+    if (!snap.exists) { if (round > 0) pushRemote(); return; }
+    // 이번에 연 뒤 아직 아무것도 하지 않았다면 저장된 진행 상황을 불러온다
+    if (touched || busy) { pushRemote(); return; }
+    applyRemote(snap.data() || {});
+    restoreView();
   }
   function loadProgress() {
     try {
@@ -457,8 +511,10 @@ textarea { width: 100%; min-height: 250px; resize: vertical; border: 1px solid v
   }
 
   function save() {
+    touched = true;
     store.set("team-draw-names", $("names").value);
     store.set("team-draw-fixed", JSON.stringify([...fixed]));
+    pushRemoteSoon();
   }
 
   $("names").addEventListener("input", () => { save(); refreshSetup(); renderBoard(); });
@@ -732,6 +788,7 @@ textarea { width: 100%; min-height: 250px; resize: vertical; border: 1px solid v
   function startDraw() {
     const { groups, ok } = refreshSetup();
     if (!ok) return;
+    touched = true;
     const placed = placedMap();
     const remaining = groups.map((g) => g.filter((n) => !placed.has(n))).filter((g) => g.length);
     let built;
@@ -750,6 +807,7 @@ textarea { width: 100%; min-height: 250px; resize: vertical; border: 1px solid v
 
   // 배치 결과를 모두 지우고 처음 상태로 (명단과 직접 고정한 학생은 유지)
   function restartAll() {
+    touched = true;
     autoRun = false;
     plan = []; round = 0; bigTeams = [];
     TEAMS.forEach((t) => teams[t] = []);
@@ -813,11 +871,18 @@ textarea { width: 100%; min-height: 250px; resize: vertical; border: 1px solid v
     });
   });
 
-  refreshSetup();
-  renderBoard();
-  if (loadProgress()) {
+  // 저장된 진행 상황을 화면에 보여준다 (진행 중이면 이어서 추첨할 수 있게)
+  function restoreView() {
     refreshSetup();
+    if (!round) {
+      $("stage").hidden = true;
+      $("setup").hidden = false;
+      document.body.classList.remove("drawing");
+      renderBoard();
+      return;
+    }
     showStage();
+    $("banner").hidden = true;
     if (round >= plan.length) {
       showFinal();
       showIdleSlots("지난 추첨 결과를 불러왔습니다. 다시 하려면 ‘처음부터 다시 추첨’을 누르세요.");
@@ -827,5 +892,10 @@ textarea { width: 100%; min-height: 250px; resize: vertical; border: 1px solid v
     }
     updateControls();
   }
+
+  refreshSetup();
+  renderBoard();
+  if (loadProgress()) restoreView();
+  connectRemote();
 })();
 </script>
