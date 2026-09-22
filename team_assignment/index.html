@@ -136,7 +136,7 @@ textarea { width: 100%; min-height: 250px; resize: vertical; border: 1px solid v
 
 /* 진행 트랙: 한 칸 = 한 번의 추첨 */
 .track { list-style: none; margin: 0; padding: 0; display: flex; gap: 6px; }
-.track li { flex: 1 1 0; min-width: 0; height: 30px; border-radius: 6px; border: 1px solid var(--line); background: var(--ground); display: grid; place-items: center; white-space: nowrap; overflow: hidden; font-family: var(--mono); font-size: 12px; color: var(--muted); transition: background-color .3s, color .3s; }
+.track li { flex: 1 1 0; min-width: 0; height: 30px; border-radius: 6px; border: 1px solid var(--line); background: var(--ground); display: flex; align-items: center; justify-content: center; white-space: nowrap; overflow: hidden; font-family: var(--mono); font-size: 12px; color: var(--muted); transition: background-color .3s, color .3s; }
 .track li.done { background: var(--ink); border-color: var(--ink); color: var(--surface); }
 .track li.now { border: 2px solid var(--ink); color: var(--ink); font-weight: 700; }
 .track li.five::after { content: "·5명"; font-size: 10px; }
@@ -272,7 +272,7 @@ textarea { width: 100%; min-height: 250px; resize: vertical; border: 1px solid v
       <div class="upnext" id="upnext"></div>
       <div class="actions">
         <span class="tip" id="tip">스페이스바로도 시작할 수 있어요</span>
-        <button type="button" class="btn go" id="next">다음 추첨 시작</button>
+        <button type="button" class="btn go" id="next">이어서 추첨 시작</button>
         <button type="button" class="btn go" id="again" hidden>처음부터 다시 추첨</button>
       </div>
     </div>
@@ -617,12 +617,12 @@ textarea { width: 100%; min-height: 250px; resize: vertical; border: 1px solid v
     $("reset").disabled = busy;
     $("restart").disabled = busy;
     $("restart").hidden = done;
-    if (!done) $("next").textContent = busy ? "추첨 중…" : `${round + 1}번째 추첨 시작`;
+    if (!done) $("next").textContent = busy ? "추첨 중…" : "이어서 추첨 시작";
 
     const up = $("upnext");
     up.textContent = "";
     if (!done && !busy) {
-      up.append("다음 차례 ");
+      up.append(`다음 차례 (${round + 1}번째 추첨) `);
       const b = document.createElement("b");
       b.textContent = plan[round].map((m) => m.name).join(", ");
       up.append(b);
@@ -728,7 +728,10 @@ textarea { width: 100%; min-height: 250px; resize: vertical; border: 1px solid v
     }
     busy = false;
     updateControls();
-    (final ? $("again") : $("next")).focus({ preventScroll: true });
+    const nextBtn = final ? $("again") : $("next");
+    nextBtn.focus({ preventScroll: true });
+    // 결과 바로 아래의 '이어서 추첨 시작' 버튼이 화면에 보이도록
+    nextBtn.scrollIntoView({ block: "nearest", behavior: reduceMotion ? "auto" : "smooth" });
   }
 
   function showFinal() {
@@ -888,7 +891,7 @@ textarea { width: 100%; min-height: 250px; resize: vertical; border: 1px solid v
       showIdleSlots("지난 추첨 결과를 불러왔습니다. 다시 하려면 ‘처음부터 다시 추첨’을 누르세요.");
     } else {
       renderBoard();
-      showIdleSlots("지난 추첨 결과를 불러왔습니다. 배치된 학생은 팀이 고정되어 있습니다.<br>아래 버튼을 누르면 이어서 추첨합니다.");
+      showIdleSlots("지난 추첨 결과를 불러왔습니다. 배치된 학생은 팀이 고정되어 있습니다.<br>‘이어서 추첨 시작’을 누르면 계속 추첨합니다.");
     }
     updateControls();
   }
