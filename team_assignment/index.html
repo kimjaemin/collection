@@ -127,6 +127,13 @@ textarea { width: 100%; min-height: 250px; resize: vertical; border: 1px solid v
 .slot.idle { display: grid; place-items: center; color: var(--muted); font-size: 14px; text-align: center; }
 .banner { margin: 0; padding: 14px 16px; border-radius: 10px; background: var(--ink); color: var(--surface); font-weight: 700; font-size: 18px; }
 
+/* 확인 창 (처음부터 다시) */
+.confirm { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 20px; padding: 16px 20px; border-radius: 14px; background: var(--surface); border: 2px solid var(--danger); }
+.confirm p { margin: 0; font-weight: 500; }
+.btn.danger { background: var(--danger); color: var(--surface); }
+.locked-note { margin: 10px 0 0; font-size: 13px; color: var(--ink); background: var(--ground); border-radius: 8px; padding: 8px 12px; }
+.locked-note[hidden] { display: none; }
+
 /* 진행 트랙: 한 칸 = 한 번의 추첨 */
 .track { list-style: none; margin: 0; padding: 0; display: flex; gap: 6px; }
 .track li { flex: 1 1 0; min-width: 0; height: 30px; border-radius: 6px; border: 1px solid var(--line); background: var(--ground); display: grid; place-items: center; white-space: nowrap; overflow: hidden; font-family: var(--mono); font-size: 12px; color: var(--muted); transition: background-color .3s, color .3s; }
@@ -200,6 +207,14 @@ textarea { width: 100%; min-height: 250px; resize: vertical; border: 1px solid v
     <div class="progress" aria-live="polite"><b id="placed">0</b> / <span id="total">0</span>명 배치</div>
   </header>
 
+  <div class="confirm" id="confirm" role="alertdialog" aria-labelledby="confirm-text" hidden>
+    <p id="confirm-text"></p>
+    <div class="actions">
+      <button type="button" class="btn ghost" id="confirm-no">취소</button>
+      <button type="button" class="btn danger" id="confirm-yes">결과 지우고 처음부터</button>
+    </div>
+  </div>
+
   <!-- 설정 -->
   <section class="panel setup" id="setup">
     <div>
@@ -222,6 +237,7 @@ textarea { width: 100%; min-height: 250px; resize: vertical; border: 1px solid v
         <button type="button" class="btn" id="fix-add">고정</button>
       </div>
       <div class="chips" id="chips"></div>
+      <p class="locked-note" id="locked-note" hidden></p>
       <div class="rules">
         <div><strong>팀 인원</strong> 41명 기준 10명 팀 3개, 11명 팀 1개</div>
         <div><strong>배치 방식</strong> 한 줄의 4명은 서로 다른 팀으로, 5명이면 한 팀에만 2명이 들어감</div>
@@ -230,6 +246,7 @@ textarea { width: 100%; min-height: 250px; resize: vertical; border: 1px solid v
     </div>
     <div class="actions" style="grid-column: 1 / -1">
       <button type="button" class="btn big" id="start">추첨 시작</button>
+      <button type="button" class="btn ghost" id="restart-setup" hidden>처음부터 다시</button>
       <p class="error" id="error" role="alert"></p>
     </div>
   </section>
@@ -242,6 +259,7 @@ textarea { width: 100%; min-height: 250px; resize: vertical; border: 1px solid v
         <button type="button" class="btn ghost" id="sound" aria-pressed="true">소리 켜짐</button>
         <button type="button" class="btn ghost" id="auto">끝까지 자동 진행</button>
         <button type="button" class="btn ghost" id="reset">명단 수정</button>
+        <button type="button" class="btn ghost" id="restart">처음부터 다시</button>
       </div>
     </div>
     <ol class="track" id="track" aria-label="추첨 진행 상황"></ol>
@@ -255,7 +273,7 @@ textarea { width: 100%; min-height: 250px; resize: vertical; border: 1px solid v
       <div class="actions">
         <span class="tip" id="tip">스페이스바로도 시작할 수 있어요</span>
         <button type="button" class="btn go" id="next">다음 추첨 시작</button>
-        <button type="button" class="btn go" id="again" hidden>같은 명단으로 다시 추첨</button>
+        <button type="button" class="btn go" id="again" hidden>처음부터 다시 추첨</button>
       </div>
     </div>
   </section>
@@ -292,6 +310,7 @@ textarea { width: 100%; min-height: 250px; resize: vertical; border: 1px solid v
   const store = {
     get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
     set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} },
+    del(k) { try { localStorage.removeItem(k); } catch (e) {} },
   };
 
   let fixed = new Map([["김제민", "A"]]);
@@ -317,20 +336,26 @@ textarea { width: 100%; min-height: 250px; resize: vertical; border: 1px solid v
   const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
 
   // ---------- 배치 알고리즘 (team_assign.py 와 동일) ----------
-  function buildPlan(groups, fixedMap) {
+  // placed: 이미 추첨으로 배치된 학생 {이름: 팀} (자동 고정, groups 에는 없음)
+  function buildPlan(groups, fixedMap, placed = new Map()) {
     const names = groups.flat();
-    const base = Math.floor(names.length / TEAMS.length);
-    const extra = names.length % TEAMS.length;
+    const total = names.length + placed.size;
+    const base = Math.floor(total / TEAMS.length);
+    const extra = total % TEAMS.length;
     const fixedCount = { A: 0, B: 0, C: 0, D: 0 };
+    const placedCount = { A: 0, B: 0, C: 0, D: 0 };
+    placed.forEach((t) => { fixedCount[t]++; placedCount[t]++; });
+    fixedMap = new Map([...fixedMap].filter(([n]) => names.includes(n)));
     fixedMap.forEach((t) => fixedCount[t]++);
     const over = TEAMS.filter((t) => fixedCount[t] > base);
     if (TEAMS.some((t) => fixedCount[t] > base + 1) || over.length > extra) {
-      throw new Error(`고정한 학생이 팀 정원보다 많습니다. 팀당 ${base}명까지 고정할 수 있고, ${base + 1}명까지 고정할 수 있는 팀은 ${extra}개입니다.`);
+      throw new Error(`고정·배치된 학생이 팀 정원보다 많습니다. 팀당 ${base}명까지 고정할 수 있고, ${base + 1}명까지 고정할 수 있는 팀은 ${extra}개입니다.`);
     }
     const big = over.concat(shuffle(TEAMS.filter((t) => !over.includes(t))).slice(0, extra - over.length));
     const cap = {}; TEAMS.forEach((t) => cap[t] = base + (big.includes(t) ? 1 : 0));
-    const reserved = { ...fixedCount };
-    const count = { A: 0, B: 0, C: 0, D: 0 };
+    const reserved = { A: 0, B: 0, C: 0, D: 0 };
+    fixedMap.forEach((t) => reserved[t]++);
+    const count = { ...placedCount };
     const rounds = [];
     const room = (t) => cap[t] - count[t] - reserved[t];
     // 남은 자리가 가장 많은 팀 중에서 무작위로 고른다 (팀 인원이 끝까지 고르게 유지됨)
@@ -353,12 +378,34 @@ textarea { width: 100%; min-height: 250px; resize: vertical; border: 1px solid v
     return { rounds, big, base };
   }
 
+  // ---------- 진행 상태 (배치된 학생 = 자동 고정) ----------
+  function placedMap() {
+    const m = new Map();
+    plan.slice(0, round).flat().forEach((x) => m.set(x.name, x.team));
+    return m;
+  }
+  function saveProgress() {
+    if (round > 0) store.set("team-draw-progress", JSON.stringify({ plan, round, bigTeams }));
+    else store.del("team-draw-progress");
+  }
+  function loadProgress() {
+    try {
+      const d = JSON.parse(store.get("team-draw-progress") || "null");
+      if (!d || !Array.isArray(d.plan) || !(d.round > 0) || d.round > d.plan.length) return false;
+      plan = d.plan; round = d.round; bigTeams = d.bigTeams || [];
+      TEAMS.forEach((t) => teams[t] = []);
+      plan.slice(0, round).flat().forEach((m) => teams[m.team].push(m));
+      return true;
+    } catch (e) { return false; }
+  }
+
   // ---------- 설정 화면 ----------
   function refreshSetup() {
     const groups = parseGroups($("names").value);
     const names = groups.flat();
+    const placed = placedMap();
     const dupes = [...new Set(names.filter((n, i) => names.indexOf(n) !== i))];
-    [...fixed.keys()].forEach((n) => { if (!names.includes(n)) fixed.delete(n); });
+    [...fixed.keys()].forEach((n) => { if (!names.includes(n) && !placed.has(n)) fixed.delete(n); });
 
     const count = $("count");
     count.textContent = `${names.length}명 입력됨 · ${groups.length}번에 나눠 추첨` + (names.length === 41 ? " · 41명 확인" : ` · 41명과 ${names.length > 41 ? "+" : ""}${names.length - 41}명 차이`);
@@ -367,24 +414,28 @@ textarea { width: 100%; min-height: 250px; resize: vertical; border: 1px solid v
     const badLines = [];
     groups.forEach((g, i) => {
       const last = i === groups.length - 1;
+      if (g.some((n) => placed.has(n))) return; // 이미 추첨이 진행된 줄
       if (g.length > MAX_GROUP || (g.length < MIN_GROUP && !last)) badLines.push(`${i + 1}번째 줄(${g.length}명)`);
     });
     const problems = [];
     if (dupes.length) problems.push(`이름이 중복되었습니다: ${dupes.join(", ")}. 동명이인은 '김민수A'처럼 구분해 주세요.`);
     if (badLines.length) problems.push(`한 줄에는 ${MIN_GROUP}~${MAX_GROUP}명을 입력해 주세요: ${badLines.join(", ")}`);
+    const missing = [...placed.keys()].filter((n) => !names.includes(n));
+    if (missing.length) problems.push(`이미 팀에 배치된 학생은 명단에서 지울 수 없습니다: ${missing.join(", ")}. 모두 지우려면 '처음부터 다시'를 누르세요.`);
     $("error").textContent = problems.join("\n");
 
     const sel = $("fix-name");
     const prev = sel.value;
     sel.innerHTML = "";
-    names.filter((n) => !fixed.has(n)).forEach((n) => sel.add(new Option(n, n)));
+    names.filter((n) => !fixed.has(n) && !placed.has(n)).forEach((n) => sel.add(new Option(n, n)));
     if ([...sel.options].some((o) => o.value === prev)) sel.value = prev;
     $("fix-add").disabled = !sel.options.length;
 
     const chips = $("chips");
     chips.innerHTML = "";
-    if (!fixed.size) chips.innerHTML = '<span class="empty">고정한 학생이 없습니다. 모두 무작위로 배치됩니다.</span>';
-    fixed.forEach((t, n) => {
+    const manual = [...fixed].filter(([n]) => !placed.has(n));
+    if (!manual.length) chips.innerHTML = '<span class="empty">고정한 학생이 없습니다. 모두 무작위로 배치됩니다.</span>';
+    manual.forEach(([n, t]) => {
       const c = document.createElement("span");
       c.className = "chip";
       c.innerHTML = `<span class="letter" style="background:var(--team-${t.toLowerCase()})">${t}</span><span></span><button type="button" aria-label="${n} 고정 해제">×</button>`;
@@ -392,9 +443,16 @@ textarea { width: 100%; min-height: 250px; resize: vertical; border: 1px solid v
       c.querySelector("button").onclick = () => { fixed.delete(n); save(); refreshSetup(); };
       chips.append(c);
     });
+    const note = $("locked-note");
+    note.hidden = !placed.size;
+    note.textContent = `추첨으로 팀이 정해진 ${placed.size}명은 자동으로 고정되었습니다. 남은 ${names.filter((n) => !placed.has(n)).length}명만 이어서 추첨합니다.`;
+
     $("total").textContent = names.length;
-    const ok = names.length >= MIN_GROUP && !problems.length;
+    const remaining = names.filter((n) => !placed.has(n)).length;
+    const ok = (placed.size ? remaining > 0 : names.length >= MIN_GROUP) && !problems.length;
     $("start").disabled = !ok;
+    $("start").textContent = placed.size ? `이어서 추첨 (남은 ${remaining}명)` : "추첨 시작";
+    $("restart-setup").hidden = !placed.size;
     return { groups, names, ok };
   }
 
@@ -501,6 +559,8 @@ textarea { width: 100%; min-height: 250px; resize: vertical; border: 1px solid v
     $("next").disabled = busy;
     $("auto").disabled = busy || done || autoRun;
     $("reset").disabled = busy;
+    $("restart").disabled = busy;
+    $("restart").hidden = done;
     if (!done) $("next").textContent = busy ? "추첨 중…" : `${round + 1}번째 추첨 시작`;
 
     const up = $("upnext");
@@ -600,24 +660,29 @@ textarea { width: 100%; min-height: 250px; resize: vertical; border: 1px solid v
     // 팀 명단에 누적
     group.forEach((m) => teams[m.team].push(m));
     round++;
+    saveProgress();
     const final = round >= plan.length;
     renderBoard(new Set(group.map((m) => m.name)), false);
     await flyToBoard(group, els);
 
     if (final) {
-      renderBoard(new Set(), true);
-      const banner = $("banner");
-      const small = TEAMS.filter((t) => !bigTeams.includes(t));
-      banner.textContent = !bigTeams.length || !small.length
-        ? `추첨이 끝났습니다. 모든 팀이 ${teams.A.length}명입니다.`
-        : `추첨이 끝났습니다. ${bigTeams.join("·")}팀이 ${teams[bigTeams[0]].length}명, 나머지 팀은 ${teams[small[0]].length}명입니다.`;
-      banner.hidden = false;
+      showFinal();
       sfx.fanfare();
       confetti();
     }
     busy = false;
     updateControls();
     (final ? $("again") : $("next")).focus({ preventScroll: true });
+  }
+
+  function showFinal() {
+    renderBoard(new Set(), true);
+    const banner = $("banner");
+    const small = TEAMS.filter((t) => !bigTeams.includes(t));
+    banner.textContent = !bigTeams.length || !small.length
+      ? `추첨이 끝났습니다. 모든 팀이 ${teams.A.length}명입니다.`
+      : `추첨이 끝났습니다. ${bigTeams.join("·")}팀이 ${teams[bigTeams[0]].length}명, 나머지 팀은 ${teams[small[0]].length}명입니다.`;
+    banner.hidden = false;
   }
 
   // ---------- 마지막 축하 효과 ----------
@@ -650,30 +715,69 @@ textarea { width: 100%; min-height: 250px; resize: vertical; border: 1px solid v
     })(t0);
   }
 
+  function showIdleSlots(html) {
+    const slots = $("slots");
+    slots.style.removeProperty("--cols");
+    slots.innerHTML = `<div class="slot idle" style="grid-column:1/-1">${html}</div>`;
+  }
+
+  function showStage() {
+    $("setup").hidden = true;
+    $("stage").hidden = false;
+    document.body.classList.add("drawing");
+  }
+
+  // 처음 시작과 이어서 추첨을 함께 처리한다.
+  // 이미 팀이 정해진 학생은 그대로 두고(자동 고정), 남은 학생으로 다음 추첨을 다시 짠다.
   function startDraw() {
     const { groups, ok } = refreshSetup();
     if (!ok) return;
+    const placed = placedMap();
+    const remaining = groups.map((g) => g.filter((n) => !placed.has(n))).filter((g) => g.length);
     let built;
-    try { built = buildPlan(groups, fixed); }
+    try { built = buildPlan(remaining, fixed, placed); }
     catch (err) { $("error").textContent = err.message; return; }
     autoRun = false;
-    plan = built.rounds;
+    plan = plan.slice(0, round).concat(built.rounds);
     bigTeams = built.big;
-    round = 0;
-    TEAMS.forEach((t) => teams[t] = []);
-    $("setup").hidden = true;
-    $("stage").hidden = false;
     $("banner").hidden = true;
-    document.body.classList.add("drawing");
+    showStage();
     renderBoard();
     $("stage").scrollIntoView({ block: "start", behavior: reduceMotion ? "auto" : "smooth" });
-    // 시작 버튼을 누르면 바로 첫 번째 추첨이 진행된다
+    // 버튼을 누르면 바로 다음 추첨이 진행된다
     drawRound();
   }
 
+  // 배치 결과를 모두 지우고 처음 상태로 (명단과 직접 고정한 학생은 유지)
+  function restartAll() {
+    autoRun = false;
+    plan = []; round = 0; bigTeams = [];
+    TEAMS.forEach((t) => teams[t] = []);
+    saveProgress();
+    $("confirm").hidden = true;
+    $("banner").hidden = true;
+    $("stage").hidden = true;
+    $("setup").hidden = false;
+    document.body.classList.remove("drawing");
+    refreshSetup(); renderBoard();
+    $("start").focus();
+  }
+  function askRestart() {
+    if (busy) return;
+    if (!round) { restartAll(); return; }
+    autoRun = false;
+    $("confirm-text").textContent = `팀에 배치된 ${round === plan.length ? "모든" : placedMap().size + "명의"} 결과가 지워지고 처음부터 다시 추첨합니다. 명단과 직접 고정한 학생은 그대로 남습니다.`;
+    $("confirm").hidden = false;
+    $("confirm").scrollIntoView({ block: "center", behavior: reduceMotion ? "auto" : "smooth" });
+    $("confirm-no").focus({ preventScroll: true });
+  }
+  $("confirm-yes").addEventListener("click", restartAll);
+  $("confirm-no").addEventListener("click", () => { $("confirm").hidden = true; });
+
   $("start").addEventListener("click", startDraw);
-  // 같은 명단·같은 고정 설정으로 처음부터 다시 추첨
-  $("again").addEventListener("click", () => { if (!busy) startDraw(); });
+  $("again").addEventListener("click", askRestart);
+  $("restart").addEventListener("click", askRestart);
+  $("restart-setup").addEventListener("click", askRestart);
   $("next").addEventListener("click", drawRound);
   $("auto").addEventListener("click", async () => {
     if (autoRun) return;
@@ -683,19 +787,18 @@ textarea { width: 100%; min-height: 250px; resize: vertical; border: 1px solid v
     autoRun = false;
     if (plan.length) updateControls();
   });
+  // 명단 수정: 배치 결과는 그대로 둔 채 설정 화면으로
   $("reset").addEventListener("click", () => {
     autoRun = false;
-    TEAMS.forEach((t) => teams[t] = []);
-    plan = []; round = 0;
     $("stage").hidden = true;
     $("setup").hidden = false;
     document.body.classList.remove("drawing");
-    refreshSetup(); renderBoard();
+    refreshSetup(); renderBoard(new Set(), round > 0 && round >= plan.length);
   });
   document.addEventListener("keydown", (e) => {
     if (e.code === "Space" && !$("stage").hidden && !["TEXTAREA", "SELECT", "BUTTON"].includes(e.target.tagName)) {
       e.preventDefault();
-      if (round >= plan.length) { if (!busy) startDraw(); } else drawRound();
+      if (round < plan.length && $("confirm").hidden) drawRound();
     }
   });
 
@@ -712,5 +815,17 @@ textarea { width: 100%; min-height: 250px; resize: vertical; border: 1px solid v
 
   refreshSetup();
   renderBoard();
+  if (loadProgress()) {
+    refreshSetup();
+    showStage();
+    if (round >= plan.length) {
+      showFinal();
+      showIdleSlots("지난 추첨 결과를 불러왔습니다. 다시 하려면 ‘처음부터 다시 추첨’을 누르세요.");
+    } else {
+      renderBoard();
+      showIdleSlots("지난 추첨 결과를 불러왔습니다. 배치된 학생은 팀이 고정되어 있습니다.<br>아래 버튼을 누르면 이어서 추첨합니다.");
+    }
+    updateControls();
+  }
 })();
 </script>
